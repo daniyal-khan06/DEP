@@ -1,0 +1,89 @@
+import tweepy
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import string
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+# Step 1: Data Collection using Twitter API
+def collect_tweets(api_key, api_secret_key, access_token, access_token_secret, search_query, num_tweets):
+    # Authenticate to Twitter API
+    auth = tweepy.OAuthHandler(api_key, api_secret_key)
+    auth.set_access_token(access_token, access_token_secret)
+    api = tweepy.API(auth, wait_on_rate_limit=True)
+
+    # Search for tweets
+    tweets = tweepy.Cursor(api.search, q=search_query, lang='en').items(num_tweets)
+
+    # Extract tweet text
+    tweet_texts = [tweet.text for tweet in tweets]
+    return tweet_texts
+
+# Step 2: Text Preprocessing
+def preprocess_tweets(tweet_texts):
+    nltk.download('punkt')
+    nltk.download('stopwords')
+    stop_words = set(stopwords.words('english'))
+    punctuation = set(string.punctuation)
+
+    tokenized_tweets = [word_tokenize(tweet.lower()) for tweet in tweet_texts]
+    filtered_tweets = []
+    for tweet in tokenized_tweets:
+        filtered_tweet = [word for word in tweet if word not in stop_words and word not in punctuation]
+        filtered_tweets.append(filtered_tweet)
+    return filtered_tweets
+
+# Step 3: Sentiment Analysis using VADER
+def analyze_sentiment(tweet_texts):
+    sid = SentimentIntensityAnalyzer()
+    sentiments = []
+    for tweet in tweet_texts:
+        sentiment_score = sid.polarity_scores(tweet)
+        if sentiment_score['compound'] >= 0.05:
+            sentiments.append('positive')
+        elif sentiment_score['compound'] <= -0.05:
+            sentiments.append('negative')
+        else:
+            sentiments.append('neutral')
+    return sentiments
+
+# Step 4: Visualization of Sentiment Trends
+def visualize_sentiment(sentiments):
+    sentiment_counts = pd.Series(sentiments).value_counts()
+
+    plt.figure(figsize=(8, 6))
+    sns.barplot(x=sentiment_counts.index, y=sentiment_counts.values, palette='viridis')
+    plt.title('Sentiment Analysis of Social Media Posts')
+    plt.xlabel('Sentiment')
+    plt.ylabel('Number of Tweets')
+    plt.show()
+
+# Main execution
+def main():
+    # Twitter API credentials (replace with your own)
+    api_key = 'your_api_key'
+    api_secret_key = 'your_api_secret_key'
+    access_token = 'your_access_token'
+    access_token_secret = 'your_access_token_secret'
+
+    # Parameters
+    search_query = 'your_search_query'  # Replace with your product or brand
+    num_tweets = 100
+
+    # Step 1: Collect tweets
+    tweet_texts = collect_tweets(api_key, api_secret_key, access_token, access_token_secret, search_query, num_tweets)
+
+    # Step 2: Preprocess tweets
+    filtered_tweets = preprocess_tweets(tweet_texts)
+
+    # Step 3: Perform sentiment analysis
+    sentiments = analyze_sentiment([' '.join(tweet) for tweet in filtered_tweets])
+
+    # Step 4: Visualize sentiment trends
+    visualize_sentiment(sentiments)
+
+if __name__ == "__main__":
+    main()
