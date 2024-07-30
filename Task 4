@@ -1,0 +1,173 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import IsolationForest
+from sklearn.neural_network import Autoencoder
+from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+
+# Step 1: Data Collection and Preprocessing
+print("Step 1: Data Collection and Preprocessing")
+# Load network traffic data from a CSV file into a pandas DataFrame
+print("Loading the network traffic dataset...")
+df = pd.read_csv('network_traffic.csv')
+
+# Display the first few rows of the dataset to understand its structure
+print("Here are the first few rows of the dataset:")
+print(df.head())
+
+# Check for missing values and data types
+print("\nChecking for missing values and data types...")
+print(df.info())
+
+# Handle missing values: Fill missing values with the median of the respective columns
+print("\nFilling missing values with median...")
+df.fillna(df.median(), inplace=True)
+
+# Verify that there are no more missing values
+print("Checking for missing values again:")
+print(df.isnull().sum())
+
+# Step 2: Feature Extraction
+print("\nStep 2: Feature Extraction")
+# Extract features relevant for anomaly detection (e.g., packet size, time intervals)
+# For this example, assume features are 'PacketSize' and 'TimeInterval'
+features = df[['PacketSize', 'TimeInterval']]
+
+# Normalize the features to ensure they contribute equally to the anomaly detection algorithm
+print("Normalizing the features...")
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(features)
+
+# Step 3: Anomaly Detection Using Isolation Forest
+print("\nStep 3: Anomaly Detection Using Isolation Forest")
+# Initialize and fit the Isolation Forest model
+print("Applying Isolation Forest for anomaly detection...")
+iso_forest = IsolationForest(contamination=0.01, random_state=42)  # contamination rate is an estimate of the proportion of outliers
+df['Anomaly_IsolationForest'] = iso_forest.fit_predict(scaled_features)
+
+# Convert the anomaly column to a binary label (1 for outliers, 0 for inliers)
+df['Anomaly_IsolationForest'] = df['Anomaly_IsolationForest'].map({1: 0, -1: 1})
+
+# Display the number of detected anomalies
+print(f"Number of detected anomalies using Isolation Forest: {df['Anomaly_IsolationForest'].sum()}")
+
+# Step 4: Anomaly Detection Using Autoencoder
+print("\nStep 4: Anomaly Detection Using Autoencoder")
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.metrics import roc_auc_score
+
+# Define and compile the Autoencoder model
+print("Building and training the Autoencoder model...")
+autoencoder = Sequential([
+    Dense(32, activation='relu', input_shape=(scaled_features.shape[1],)),
+    Dense(16, activation='relu'),
+    Dense(8, activation='relu'),
+    Dense(16, activation='relu'),
+    Dense(32, activation='relu'),
+    Dense(scaled_features.shape[1], activation='sigmoid')
+])
+
+autoencoder.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the Autoencoder
+autoencoder.fit(scaled_features, scaled_features, epochs=50, batch_size=64, validation_split=0.1, verbose=1)
+
+# Reconstruct the input and compute reconstruction error
+reconstructed = autoencoder.predict(scaled_features)
+mse = np.mean(np.power(scaled_features - reconstructed, 2), axis=1)
+
+# Set a threshold for anomaly detection (95th percentile of reconstruction error)
+threshold = np.percentile(mse, 95)
+df['Anomaly_Autoencoder'] = mse > threshold
+
+# Display the number of detected anomalies
+print(f"Number of detected anomalies using Autoencoder: {df['Anomaly_Autoencoder'].sum()}")
+
+# Step 5: Evaluation and Validation
+print("\nStep 5: Evaluation and Validation")
+# For demonstration, let's assume we have ground truth labels for anomalies
+# In practice, you may need to label your data manually or use known attack patterns
+if 'GroundTruth' in df.columns:
+    print("\nEvaluating the model performance...")
+    
+    # Compute and display classification metrics for Isolation Forest
+    print("\nIsolation Forest Evaluation:")
+    print("Confusion Matrix:")
+    cm_if = confusion_matrix(df['GroundTruth'], df['Anomaly_IsolationForest'])
+    print(cm_if)
+    
+    print("\nClassification Report:")
+    report_if = classification_report(df['GroundTruth'], df['Anomaly_IsolationForest'])
+    print(report_if)
+
+    # Compute and display classification metrics for Autoencoder
+    print("\nAutoencoder Evaluation:")
+    print("Confusion Matrix:")
+    cm_ae = confusion_matrix(df['GroundTruth'], df['Anomaly_Autoencoder'])
+    print(cm_ae)
+    
+    print("\nClassification Report:")
+    report_ae = classification_report(df['GroundTruth'], df['Anomaly_Autoencoder'])
+    print(report_ae)
+    
+    # Plot confusion matrices
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    sns.heatmap(cm_if, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Anomaly'], yticklabels=['Normal', 'Anomaly'])
+    plt.title('Isolation Forest Confusion Matrix')
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+
+    plt.subplot(1, 2, 2)
+    sns.heatmap(cm_ae, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Anomaly'], yticklabels=['Normal', 'Anomaly'])
+    plt.title('Autoencoder Confusion Matrix')
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+
+    plt.tight_layout()
+    plt.show()
+else:
+    print("\nGround truth labels are not available. Evaluation will be performed based on detected anomalies only.")
+
+# Step 6: Visualization of Anomalies
+print("\nStep 6: Visualization of Anomalies")
+# Reduce dimensions for visualization using PCA
+print("Reducing dimensions for visualization...")
+pca = PCA(n_components=2)
+pca_features = pca.fit_transform(scaled_features)
+
+# Add PCA components to the DataFrame
+df['PCA1'] = pca_features[:, 0]
+df['PCA2'] = pca_features[:, 1]
+
+# Plot the anomalies detected by Isolation Forest
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.scatter(df['PCA1'], df['PCA2'], c=df['Anomaly_IsolationForest'], cmap='coolwarm', marker='o')
+plt.title('Anomalies Detected by Isolation Forest')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.colorbar(label='Anomaly')
+
+# Plot the anomalies detected by Autoencoder
+plt.subplot(1, 2, 2)
+plt.scatter(df['PCA1'], df['PCA2'], c=df['Anomaly_Autoencoder'], cmap='coolwarm', marker='o')
+plt.title('Anomalies Detected by Autoencoder')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.colorbar(label='Anomaly')
+
+plt.tight_layout()
+plt.show()
+
+# Optional: Save the DataFrame with anomaly labels to a new CSV file
+print("Saving the dataset with anomaly labels to a new CSV file...")
+df.to_csv('network_traffic_with_anomalies.csv', index=False)
+
+print("Anomaly detection and visualization complete. Check 'network_traffic_with_anomalies.csv' for results.")
