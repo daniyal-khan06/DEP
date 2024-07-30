@@ -1,0 +1,122 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Step 1: Load the Data
+# Load the transaction data from a CSV file into a pandas DataFrame
+print("Loading the dataset...")
+df = pd.read_csv('customer_data.csv')
+
+# Display the first few rows of the dataset to understand its structure
+print("Here are the first few rows of the dataset:")
+print(df.head())
+
+# Step 2: Data Cleaning
+# Check for missing values and data types
+print("\nChecking for missing values and data types...")
+print(df.info())
+
+# Handle missing values: Fill missing values with the median of the respective columns
+print("\nFilling missing values with median...")
+df.fillna(df.median(), inplace=True)
+
+# Verify that there are no more missing values
+print("Checking for missing values again:")
+print(df.isnull().sum())
+
+# Step 3: Feature Engineering
+# Create new features if necessary (e.g., Recency, Frequency, Monetary Value)
+# Assuming we already have these features in our dataset
+# If not, create them based on your dataset
+
+# For demonstration, assume df already contains 'Recency', 'Frequency', and 'MonetaryValue'
+
+# Step 4: Exploratory Data Analysis (EDA)
+# Summary statistics
+print("\nSummary statistics of the features:")
+print(df[['Recency', 'Frequency', 'MonetaryValue']].describe())
+
+# Plot histograms to understand the distribution of features
+print("\nPlotting histograms for each feature...")
+df[['Recency', 'Frequency', 'MonetaryValue']].hist(bins=30, figsize=(12, 6))
+plt.suptitle('Histograms of Features')
+plt.show()
+
+# Check for correlations between features
+print("\nCorrelation matrix:")
+print(df[['Recency', 'Frequency', 'MonetaryValue']].corr())
+
+# Plot the correlation matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(df[['Recency', 'Frequency', 'MonetaryValue']].corr(), annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+plt.title('Correlation Matrix')
+plt.show()
+
+# Step 5: Data Preprocessing
+# Select relevant features for clustering
+print("\nSelecting features for clustering...")
+features = df[['Recency', 'Frequency', 'MonetaryValue']]
+
+# Normalize the features to ensure they contribute equally to the clustering algorithm
+print("Normalizing the features...")
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(features)
+
+# Step 6: Determine the Number of Clusters
+# Use the Elbow Method to find the optimal number of clusters
+print("\nDetermining the optimal number of clusters using the Elbow Method...")
+wcss = []
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters=i, init='k-means++', max_iter=300, n_init=10, random_state=0)
+    kmeans.fit(scaled_features)
+    wcss.append(kmeans.inertia_)
+
+# Plot the elbow graph
+plt.figure(figsize=(8, 6))
+plt.plot(range(1, 11), wcss, marker='o')
+plt.title('Elbow Method For Optimal Number of Clusters')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS (Within-cluster sum of squares)')
+plt.show()
+
+# Based on the elbow plot, choose the optimal number of clusters (e.g., 3)
+optimal_clusters = 3
+print(f"\nChosen number of clusters: {optimal_clusters}")
+
+# Step 7: Apply K-means Clustering
+print("Applying K-means clustering...")
+kmeans = KMeans(n_clusters=optimal_clusters, init='k-means++', max_iter=300, n_init=10, random_state=42)
+clusters = kmeans.fit_predict(scaled_features)
+
+# Add cluster labels to the DataFrame
+df['Cluster'] = clusters
+
+# Step 8: Dimensionality Reduction for Visualization
+print("Reducing dimensions for visualization...")
+pca = PCA(n_components=2)
+pca_features = pca.fit_transform(scaled_features)
+
+# Add PCA components to the DataFrame
+df['PCA1'] = pca_features[:, 0]
+df['PCA2'] = pca_features[:, 1]
+
+# Step 9: Visualization of Clusters
+print("Visualizing the customer segments...")
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x='PCA1', y='PCA2', hue='Cluster', data=df, palette='viridis', marker='o')
+plt.title('Customer Segments')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.legend(title='Cluster')
+plt.show()
+
+# Optional: Save the DataFrame with cluster labels to a new CSV file
+print("Saving the segmented data to a new CSV file...")
+df.to_csv('segmented_customer_data.csv', index=False)
+
+print("Segmentation and visualization complete. Check 'segmented_customer_data.csv' for the results.")
